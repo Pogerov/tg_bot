@@ -24,22 +24,22 @@ from flask import Flask
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8580252884:AAHeS9tX6X3KCYW6d0F3cBaIE3Rz-tkJUr8")
 DB_PATH   = os.environ.get("DB_PATH", "tournament.db")
 
-# ===== СПИСОК АДМИНОВ =====
+# ===== АДМИНЫ =====
 ADMIN_IDS = [
-    7753887058,   # главный админ
-    8961573558,   # второй админ
+    7753887058,   # ты
+    8961573558,   # второй аккаунт
 ]
 
-# Можно переопределить через переменную окружения ADMIN_IDS (через запятую)
-_env_admins = os.environ.get("ADMIN_IDS", "")
-if _env_admins:
+# Переопределение через env (опционально)
+_env = os.environ.get("ADMIN_IDS", "")
+if _env:
     try:
-        ADMIN_IDS = [int(x.strip()) for x in _env_admins.split(",") if x.strip()]
+        ADMIN_IDS = [int(x.strip()) for x in _env.split(",") if x.strip()]
     except Exception:
         pass
 
 if not BOT_TOKEN:
-    print("[!] BOT_TOKEN не задан! Установи переменную окружения BOT_TOKEN.")
+    print("[!] BOT_TOKEN не задан!")
 
 # =====================================================================
 # БАЗА ДАННЫХ
@@ -245,7 +245,7 @@ async def nick_button(message: Message, state: FSMContext):
         return
     await state.set_state(UserFlow.waiting_nick)
     await message.answer(
-        "✏️ Введите ваш <b>ник</b> (любое слово):",
+        "✏️ Введите ваш <b>ник</b>:",
         parse_mode="HTML",
         reply_markup=cancel_kb()
     )
@@ -269,13 +269,13 @@ async def nick_input(message: Message, state: FSMContext):
 
     nick = (message.text or "").strip()
     if len(nick) < 2 or len(nick) > 32:
-        await message.answer("⚠️ Ник должен быть от 2 до 32 символов. Попробуйте ещё.")
+        await message.answer("⚠️ Ник должен быть от 2 до 32 символов.")
         return
     await state.update_data(nickname=nick)
     await state.set_state(UserFlow.waiting_photo)
     await message.answer(
         f"✅ Отлично, <b>{nick}</b>!\n"
-        f"Теперь отправьте своё <b>фото</b> или аватарку для завершения регистрации на турнир!",
+        f"Теперь отправьте своё <b>фото</b> для завершения регистрации на турнир!",
         parse_mode="HTML",
         reply_markup=cancel_kb()
     )
@@ -317,7 +317,6 @@ async def photo_input(message: Message, state: FSMContext):
 
     await message.answer("✅ Отлично! Подождите...", reply_markup=user_kb())
 
-    # Уведомляем ВСЕХ админов
     for admin_id in ADMIN_IDS:
         try:
             await message.bot.send_photo(
@@ -332,7 +331,7 @@ async def photo_input(message: Message, state: FSMContext):
                 reply_markup=accept_inline(user.id)
             )
         except Exception as e:
-            print(f"[!] Не удалось уведомить админа {admin_id}: {e}")
+            print(f"[!] Уведомление {admin_id}: {e}")
 
 
 @router.message(UserFlow.waiting_photo)
@@ -377,18 +376,10 @@ async def toggle_applications(message: Message):
 
     if "Закрыть" in message.text:
         set_setting("applications_open", "0")
-        await message.answer(
-            "🔒 <b>Заявки закрыты!</b>\n\nНовые регистрации заблокированы.",
-            parse_mode="HTML",
-            reply_markup=admin_kb()
-        )
+        await message.answer("🔒 <b>Заявки закрыты!</b>", parse_mode="HTML", reply_markup=admin_kb())
     else:
         set_setting("applications_open", "1")
-        await message.answer(
-            "🔓 <b>Заявки открыты!</b>\n\nНовые регистрации разрешены.",
-            parse_mode="HTML",
-            reply_markup=admin_kb()
-        )
+        await message.answer("🔓 <b>Заявки открыты!</b>", parse_mode="HTML", reply_markup=admin_kb())
 
 
 @router.callback_query(F.data.startswith("view:"))
@@ -396,15 +387,12 @@ async def view_pending(call: CallbackQuery):
     if not is_admin(call.from_user.id):
         await call.answer("Нет доступа.", show_alert=True)
         return
-
     user_id = int(call.data.split(":")[1])
     p = db_get(user_id)
     if not p:
         await call.answer("Не найден.", show_alert=True)
         return
-
     _, username, nickname, photo_id, status = p
-
     await call.message.answer_photo(
         photo=photo_id,
         caption=(
@@ -424,21 +412,15 @@ async def accept_user(call: CallbackQuery):
     if not is_admin(call.from_user.id):
         await call.answer("Нет доступа.", show_alert=True)
         return
-
     user_id = int(call.data.split(":")[1])
     p = db_get(user_id)
     if not p:
         await call.answer("Не найден.", show_alert=True)
         return
-
     db_update_status(user_id, "accepted")
     nickname = p[2]
-
     try:
-        await call.message.edit_caption(
-            caption=f"✅ <b>{nickname}</b> принят на турнир!",
-            parse_mode="HTML"
-        )
+        await call.message.edit_caption(caption=f"✅ <b>{nickname}</b> принят!", parse_mode="HTML")
     except Exception:
         pass
     await call.answer("Принят!")
@@ -449,15 +431,10 @@ async def reject_user(call: CallbackQuery):
     if not is_admin(call.from_user.id):
         await call.answer("Нет доступа.", show_alert=True)
         return
-
     user_id = int(call.data.split(":")[1])
     db_delete(user_id)
-
     try:
-        await call.message.edit_caption(
-            caption="❌ Заявка отклонена и удалена.",
-            parse_mode="HTML"
-        )
+        await call.message.edit_caption(caption="❌ Заявка отклонена.", parse_mode="HTML")
     except Exception:
         pass
     await call.answer("Удалено.")
@@ -468,16 +445,13 @@ async def view_player(call: CallbackQuery):
     if not is_admin(call.from_user.id):
         await call.answer("Нет доступа.", show_alert=True)
         return
-
     user_id = int(call.data.split(":")[1])
     p = db_get(user_id)
     if not p:
         await call.answer("Не найден.", show_alert=True)
         return
-
     _, username, nickname, photo_id, status = p
     status_text = "🏆 Выиграл" if status == "won" else "👤 В игре"
-
     await call.message.answer_photo(
         photo=photo_id,
         caption=(
@@ -497,19 +471,16 @@ async def win_user(call: CallbackQuery):
     if not is_admin(call.from_user.id):
         await call.answer("Нет доступа.", show_alert=True)
         return
-
     user_id = int(call.data.split(":")[1])
     p = db_get(user_id)
     if not p:
         await call.answer("Не найден.", show_alert=True)
         return
-
     db_update_status(user_id, "won")
     nickname = p[2]
-
     try:
         await call.message.edit_caption(
-            caption=f"🏆 <b>{nickname}</b> — ВЫИГРАЛ! Остаётся в турнире.",
+            caption=f"🏆 <b>{nickname}</b> — ВЫИГРАЛ!",
             parse_mode="HTML"
         )
     except Exception:
@@ -522,19 +493,16 @@ async def lose_user(call: CallbackQuery):
     if not is_admin(call.from_user.id):
         await call.answer("Нет доступа.", show_alert=True)
         return
-
     user_id = int(call.data.split(":")[1])
     p = db_get(user_id)
     if not p:
         await call.answer("Не найден.", show_alert=True)
         return
-
     nickname = p[2]
     db_delete(user_id)
-
     try:
         await call.message.edit_caption(
-            caption=f"🚪 <b>{nickname}</b> — ВЫБЫЛ и удалён из турнира.",
+            caption=f"🚪 <b>{nickname}</b> — ВЫБЫЛ.",
             parse_mode="HTML"
         )
     except Exception:
@@ -560,7 +528,7 @@ def run_flask():
 
 
 # =====================================================================
-# ЗАПУСК
+# ЗАПУСК (с автоудалением webhook)
 # =====================================================================
 async def main():
     init_db()
@@ -568,12 +536,21 @@ async def main():
         token=BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
+
+    # === УДАЛЯЕМ ВЕБХУК, ЧТОБЫ POLLING РАБОТАЛ ===
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        print("[BOT] Webhook deleted.")
+    except Exception as e:
+        print(f"[BOT] delete_webhook: {e}")
+
     dp = Dispatcher()
     dp.include_router(router)
 
     print("[BOT] Started.")
     print(f"[BOT] Admins: {ADMIN_IDS}")
-    await dp.start_polling(bot)
+
+    await dp.start_polling(bot, drop_pending_updates=True)
 
 
 if __name__ == "__main__":
