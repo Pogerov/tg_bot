@@ -25,6 +25,9 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "8703713200:AAFvtyjtYIygdC4UdTjP5lpCLNzO
 ADMIN_ID  = int(os.environ.get("ADMIN_ID", "7753887058"))
 DB_PATH   = os.environ.get("DB_PATH", "tournament.db")
 
+if not BOT_TOKEN:
+    print("[!] BOT_TOKEN не задан! Установи переменную окружения BOT_TOKEN.")
+
 # =====================================================================
 # БАЗА ДАННЫХ
 # =====================================================================
@@ -225,10 +228,7 @@ async def nick_button(message: Message, state: FSMContext):
     if is_admin(message.from_user.id):
         return
     if not applications_open():
-        await message.answer(
-            "😔 Извините, подача заявок <b>закрыта</b>!",
-            parse_mode="HTML"
-        )
+        await message.answer("😔 Извините, подача заявок <b>закрыта</b>!", parse_mode="HTML")
         return
     await state.set_state(UserFlow.waiting_nick)
     await message.answer(
