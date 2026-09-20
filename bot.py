@@ -21,7 +21,7 @@ from flask import Flask
 # =====================================================================
 # КОНФИГ
 # =====================================================================
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8703713200:AAFvtyjtYIygdC4UdTjP5lpCLNzOrHvrfYw")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8580252884:AAHeS9tX6X3KCYW6d0F3cBaIE3Rz-tkJUr8")
 ADMIN_ID  = int(os.environ.get("ADMIN_ID", "7753887058"))
 DB_PATH   = os.environ.get("DB_PATH", "tournament.db")
 
