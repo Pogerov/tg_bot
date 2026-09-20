@@ -1,2 +1,2 @@
-aiogram==3.13.1
-flask==3.0.3
+aiogram==3.15.0
+flask==3.1.0
