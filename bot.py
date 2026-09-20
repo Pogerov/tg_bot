@@ -2,6 +2,7 @@ import asyncio
 import threading
 import sqlite3
 import logging
+import os
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.types import (
@@ -20,9 +21,9 @@ from flask import Flask
 # =====================================================================
 # КОНФИГ
 # =====================================================================
-BOT_TOKEN = "8703713200:AAFvtyjtYIygdC4UdTjP5lpCLNzOrHvrfYw"
-ADMIN_ID  = 7753887058
-DB_PATH   = "tournament.db"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8703713200:AAFvtyjtYIygdC4UdTjP5lpCLNzOrHvrfYw")
+ADMIN_ID  = int(os.environ.get("ADMIN_ID", "7753887058"))
+DB_PATH   = os.environ.get("DB_PATH", "tournament.db")
 
 # =====================================================================
 # БАЗА ДАННЫХ
@@ -45,7 +46,6 @@ def init_db():
             value TEXT
         )
     """)
-    # По умолчанию заявки ОТКРЫТЫ
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('applications_open', '1')")
     conn.commit()
     conn.close()
@@ -192,7 +192,6 @@ class UserFlow(StatesGroup):
     waiting_photo = State()
 
 
-# ============ /start ============
 @router.message(Command("start"))
 async def start(message: Message, state: FSMContext):
     await state.clear()
@@ -205,7 +204,6 @@ async def start(message: Message, state: FSMContext):
         )
         return
 
-    # Юзер
     if not applications_open():
         await message.answer(
             "😔 Извините, подача заявок <b>закрыта</b>, турнир набрал нужное кол-во людей!\n"
@@ -222,15 +220,13 @@ async def start(message: Message, state: FSMContext):
     )
 
 
-# ============ КНОПКА «Ник» ============
 @router.message(F.text == "Ник")
 async def nick_button(message: Message, state: FSMContext):
     if is_admin(message.from_user.id):
         return
     if not applications_open():
         await message.answer(
-            "😔 Извините, подача заявок <b>закрыта</b>, турнир набрал нужное кол-во людей!\n"
-            "Удачного просмотра за игрой! 🎮",
+            "😔 Извините, подача заявок <b>закрыта</b>!",
             parse_mode="HTML"
         )
         return
@@ -242,7 +238,6 @@ async def nick_button(message: Message, state: FSMContext):
     )
 
 
-# ============ ОТМЕНА ============
 @router.message(F.text == "Отмена")
 async def cancel(message: Message, state: FSMContext):
     await state.clear()
@@ -252,15 +247,11 @@ async def cancel(message: Message, state: FSMContext):
         await message.answer("❌ Отменено.", reply_markup=user_kb())
 
 
-# ============ ВВОД НИКА ============
 @router.message(UserFlow.waiting_nick)
 async def nick_input(message: Message, state: FSMContext):
     if not applications_open():
         await state.clear()
-        await message.answer(
-            "😔 Извините, подача заявок <b>закрыта</b>!",
-            parse_mode="HTML"
-        )
+        await message.answer("😔 Извините, подача заявок <b>закрыта</b>!", parse_mode="HTML")
         return
 
     nick = (message.text or "").strip()
@@ -277,16 +268,12 @@ async def nick_input(message: Message, state: FSMContext):
     )
 
 
-# ============ КНОПКА «Фото» ============
 @router.message(F.text == "Фото")
 async def photo_button(message: Message, state: FSMContext):
     if is_admin(message.from_user.id):
         return
     if not applications_open():
-        await message.answer(
-            "😔 Извините, подача заявок <b>закрыта</b>!",
-            parse_mode="HTML"
-        )
+        await message.answer("😔 Извините, подача заявок <b>закрыта</b>!", parse_mode="HTML")
         return
     data = await state.get_data()
     if not data.get("nickname"):
@@ -296,16 +283,11 @@ async def photo_button(message: Message, state: FSMContext):
     await message.answer("📸 Отправьте фото.", reply_markup=cancel_kb())
 
 
-# ============ ФОТО ============
 @router.message(UserFlow.waiting_photo, F.photo)
 async def photo_input(message: Message, state: FSMContext):
     if not applications_open():
         await state.clear()
-        await message.answer(
-            "😔 Извините, подача заявок <b>закрыта</b>!",
-            parse_mode="HTML",
-            reply_markup=user_kb()
-        )
+        await message.answer("😔 Извините, подача заявок <b>закрыта</b>!", parse_mode="HTML", reply_markup=user_kb())
         return
 
     data = await state.get_data()
@@ -320,10 +302,7 @@ async def photo_input(message: Message, state: FSMContext):
     db_add(user.id, user.username or "", nick, photo_id)
     await state.clear()
 
-    await message.answer(
-        "✅ Отлично! Подождите...",
-        reply_markup=user_kb()
-    )
+    await message.answer("✅ Отлично! Подождите...", reply_markup=user_kb())
 
     try:
         await message.bot.send_photo(
@@ -346,7 +325,6 @@ async def photo_wrong(message: Message, state: FSMContext):
     await message.answer("⚠️ Отправьте именно <b>фото</b>.", parse_mode="HTML")
 
 
-# ============ АДМИН: НОВЫЕ ЗАЯВКИ ============
 @router.message(F.text == "📥 Новые заявки")
 async def show_pending(message: Message):
     if not is_admin(message.from_user.id):
@@ -362,7 +340,6 @@ async def show_pending(message: Message):
     )
 
 
-# ============ АДМИН: ИГРОКИ ============
 @router.message(F.text == "👥 Игроки")
 async def show_players(message: Message):
     if not is_admin(message.from_user.id):
@@ -372,13 +349,12 @@ async def show_players(message: Message):
         await message.answer("📭 Нет принятых игроков.")
         return
     await message.answer(
-        f"👥 <b>Игроки: {len(rows)}</b>\n\nНажмите на ник, чтобы посмотреть.",
+        f"👥 <b>Игроки: {len(rows)}</b>\n\nНажмите на ник.",
         parse_mode="HTML",
         reply_markup=players_inline(rows)
     )
 
 
-# ============ АДМИН: ЗАКРЫТЬ/ОТКРЫТЬ ЗАЯВКИ ============
 @router.message(F.text.in_(["🔒 Закрыть заявки", "🔓 Открыть заявки"]))
 async def toggle_applications(message: Message):
     if not is_admin(message.from_user.id):
@@ -400,7 +376,6 @@ async def toggle_applications(message: Message):
         )
 
 
-# ============ ПРОСМОТР ЗАЯВКИ ============
 @router.callback_query(F.data.startswith("view:"))
 async def view_pending(call: CallbackQuery):
     if not is_admin(call.from_user.id):
@@ -429,7 +404,6 @@ async def view_pending(call: CallbackQuery):
     await call.answer()
 
 
-# ============ ПРИНЯТЬ ============
 @router.callback_query(F.data.startswith("accept:"))
 async def accept_user(call: CallbackQuery):
     if not is_admin(call.from_user.id):
@@ -452,13 +426,9 @@ async def accept_user(call: CallbackQuery):
         )
     except Exception:
         pass
-
     await call.answer("Принят!")
 
-    # Без уведомления участнику — как ты просил
 
-
-# ============ ОТКЛОНИТЬ ============
 @router.callback_query(F.data.startswith("reject:"))
 async def reject_user(call: CallbackQuery):
     if not is_admin(call.from_user.id):
@@ -478,7 +448,6 @@ async def reject_user(call: CallbackQuery):
     await call.answer("Удалено.")
 
 
-# ============ ПРОСМОТР ИГРОКА ============
 @router.callback_query(F.data.startswith("view_player:"))
 async def view_player(call: CallbackQuery):
     if not is_admin(call.from_user.id):
@@ -492,7 +461,6 @@ async def view_player(call: CallbackQuery):
         return
 
     _, username, nickname, photo_id, status = p
-
     status_text = "🏆 Выиграл" if status == "won" else "👤 В игре"
 
     await call.message.answer_photo(
@@ -509,7 +477,6 @@ async def view_player(call: CallbackQuery):
     await call.answer()
 
 
-# ============ ВЫИГРАЛ ============
 @router.callback_query(F.data.startswith("win:"))
 async def win_user(call: CallbackQuery):
     if not is_admin(call.from_user.id):
@@ -534,10 +501,7 @@ async def win_user(call: CallbackQuery):
         pass
     await call.answer("Статус: Выиграл")
 
-    # Без уведомления участнику
 
-
-# ============ ВЫБЫЛ ============
 @router.callback_query(F.data.startswith("lose:"))
 async def lose_user(call: CallbackQuery):
     if not is_admin(call.from_user.id):
@@ -562,8 +526,6 @@ async def lose_user(call: CallbackQuery):
         pass
     await call.answer("Удалён.")
 
-    # Без уведомления участнику
-
 
 # =====================================================================
 # FLASK (для UptimeRobot)
@@ -578,7 +540,8 @@ def health():
 
 
 def run_flask():
-    flask_app.run(host="0.0.0.0", port=8080, debug=False, use_reloader=False)
+    port = int(os.environ.get("PORT", 8080))
+    flask_app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 
 # =====================================================================
