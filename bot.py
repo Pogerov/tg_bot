@@ -22,8 +22,21 @@ from flask import Flask
 # КОНФИГ
 # =====================================================================
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8580252884:AAHeS9tX6X3KCYW6d0F3cBaIE3Rz-tkJUr8")
-ADMIN_ID  = int(os.environ.get("ADMIN_ID", "7753887058"))
 DB_PATH   = os.environ.get("DB_PATH", "tournament.db")
+
+# ===== СПИСОК АДМИНОВ =====
+ADMIN_IDS = [
+    7753887058,   # главный админ
+    8961573558,   # второй админ
+]
+
+# Можно переопределить через переменную окружения ADMIN_IDS (через запятую)
+_env_admins = os.environ.get("ADMIN_IDS", "")
+if _env_admins:
+    try:
+        ADMIN_IDS = [int(x.strip()) for x in _env_admins.split(",") if x.strip()]
+    except Exception:
+        pass
 
 if not BOT_TOKEN:
     print("[!] BOT_TOKEN не задан! Установи переменную окружения BOT_TOKEN.")
@@ -181,7 +194,7 @@ def player_actions_inline(user_id):
 
 
 def is_admin(uid: int) -> bool:
-    return uid == ADMIN_ID
+    return uid in ADMIN_IDS
 
 
 # =====================================================================
@@ -304,20 +317,22 @@ async def photo_input(message: Message, state: FSMContext):
 
     await message.answer("✅ Отлично! Подождите...", reply_markup=user_kb())
 
-    try:
-        await message.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=photo_id,
-            caption=(
-                f"🎉 <b>Человек зарегистрировался!</b>\n\n"
-                f"👤 Ник: <b>{nick}</b>\n"
-                f"🆔 ID: <code>{user.id}</code>"
-            ),
-            parse_mode="HTML",
-            reply_markup=accept_inline(user.id)
-        )
-    except Exception as e:
-        print(f"[!] Не удалось уведомить админа: {e}")
+    # Уведомляем ВСЕХ админов
+    for admin_id in ADMIN_IDS:
+        try:
+            await message.bot.send_photo(
+                chat_id=admin_id,
+                photo=photo_id,
+                caption=(
+                    f"🎉 <b>Человек зарегистрировался!</b>\n\n"
+                    f"👤 Ник: <b>{nick}</b>\n"
+                    f"🆔 ID: <code>{user.id}</code>"
+                ),
+                parse_mode="HTML",
+                reply_markup=accept_inline(user.id)
+            )
+        except Exception as e:
+            print(f"[!] Не удалось уведомить админа {admin_id}: {e}")
 
 
 @router.message(UserFlow.waiting_photo)
@@ -557,6 +572,7 @@ async def main():
     dp.include_router(router)
 
     print("[BOT] Started.")
+    print(f"[BOT] Admins: {ADMIN_IDS}")
     await dp.start_polling(bot)
 
 
